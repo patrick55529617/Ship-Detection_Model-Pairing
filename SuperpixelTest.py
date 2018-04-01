@@ -18,12 +18,12 @@ if __name__ == '__main__':
         pass
 
     cv.namedWindow('SEEDS')
-    cv.createTrackbar('Number of Superpixels', 'SEEDS', 400, 1000, nothing)
+    cv.createTrackbar('Number of Superpixels', 'SEEDS', 200, 1000, nothing)
     cv.createTrackbar('Iterations', 'SEEDS', 4, 12, nothing)
 
     seeds = None
     display_mode = 0
-    num_superpixels = 400
+    num_superpixels = 200
     prior = 2
     num_levels = 4
     num_histogram_bins = 5
@@ -46,15 +46,43 @@ if __name__ == '__main__':
         seeds.iterate(converted_img, num_iterations)
         
         # retrieve the segmentation result
+        seedNumber = seeds.getNumberOfSuperpixels()
+        
         labels = seeds.getLabels()
         
-        # labels output: use the last x bits to determine the color
-#        num_label_bits = 2
-#        labels &= (1<<num_label_bits)-1
-#        labels *= 1<<(16-num_label_bits)
-        
         mask = seeds.getLabelContourMask(False)
+        SuperPixel_img = img
         
+        #seedTable[i,0] represents pixel value of the ith seeds
+        seedTable = np.zeros((seedNumber, 2), dtype=np.int) 
+        
+        #VoteTable_SeedNumber[i,0] represents the amount of pixel value 'i' 
+        #VoteTable_SeedNumber[i,1] represents the amount of 
+        
+        VoteTable_SeedNumber = np.zeros((256,2), dtype=np.int)
+        
+        
+        thee = 0 
+        for i in range(SuperPixel_img.shape[0]):
+            for j in range(SuperPixel_img.shape[1]):
+                thee+=1
+                if thee%40==0:
+                    thee=0
+                    temp = labels[i,j]
+                    seedTable[temp,0] += converted_img[i,j,0]
+                    seedTable[temp,1] += 1
+        
+        for i in range(seedNumber):
+            seedTable[i,0] /= seedTable[i,1]
+        
+        
+        for i in range(height):
+            for j in range(width):
+                VoteTable_SeedNumber[seedTable[labels[i,j],0],1]+=1
+         
+        for i in range(seedNumber):
+            VoteTable_SeedNumber[seedTable[i,0],0]+=1 
+
 
         # stitch foreground & background together
         mask_inv = cv.bitwise_not(mask)
