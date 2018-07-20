@@ -1,131 +1,139 @@
 # coding:utf8
 import cv2
 import numpy as np
-#from keras.models import load_model
-#from keras.preprocessing import image
-from sklearn.cluster import KMeans,DBSCAN
-from sklearn import preprocessing
+#from skimage.filters import threshold_otsu
+from keras.models import load_model
+import time
+from keras.preprocessing import image
 
-
-
-
-def return_Texture_Complexity(img):
-    imgray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    print("jjj")
-    print(np.sum(imgray))
-    print(img.shape[0])
-    print(img.shape[1])
-    mean = np.sum(imgray)/(img.shape[0]*img.shape[1])
-    print("kkk")
-    print(mean)
-    square = imgray-mean
-    square = square**2
-    variance = np.sum(square)/(img.shape[0]*img.shape[1])
-    variance/=100
-    
-    
-    
-    return variance
-
-#Module = load_model('D://user//Documents//Model//ship_model_0430_rotate.h5')
-video = 'D://testdata//test5.mp4'
+Module = load_model('D://user//Documents//ShipDetection//ship_model (1).h5')
+video = 'D://testdata//test12.mp4'
 delay = 13
-
-
 
 camera = cv2.VideoCapture(video)
 fps = camera.get(cv2.CAP_PROP_FPS)
-history = 20
+fourcc = cv2.VideoWriter_fourcc(*'XVID')
+out = cv2.VideoWriter('D://Training Data//Experiment//test12//Result_Brown.avi',fourcc, fps, (640,360))
+out1 = cv2.VideoWriter('D://Training Data//Experiment//test12//Result.avi',fourcc, fps, (640,360))
 
+# test3: 1 3 3 1 5
+# test9: 1 3 2 1 5
+# test10: 3 3 3 1 5
+# test11: 2 4 3 1 4
+# test12: 1 3 3 1 4
+
+
+positive = 0
+negative = 0
+
+print(Module.summary())
+tStart = time.time()
 frames = 0
-a=0
-while True:
+if (camera.isOpened()):    
     
-    res, frame = camera.read()
-#        print(fps)
-    criteria_RGB = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-
-    if not res:
-        break
-    imgray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    
-    Z = frame.reshape((-1,3))
-    Z1 = np.float32(Z)
-    
-    K=3
-    
-    height , width , channel = frame.shape
-    
-    if (frames==0):
-        a=0
-        kmeans_RGB = KMeans(n_clusters=K,random_state=0).fit(Z1)
-        center_RGB = kmeans_RGB.cluster_centers_
-        center_RGB = np.uint8(center_RGB)
-        label = kmeans_RGB.labels_
-        res = center_RGB[label.flatten()]
-        res2 = res.reshape((frame.shape))
+    while True:
+        res, frame = camera.read()
         
-    else:
-        label = kmeans_RGB.predict(Z1)
-        res = center_RGB[label.flatten()]
-        res2 = res.reshape((frame.shape))
+        if (res==False): break
+        frame = cv2.resize(frame, (640, 360))
+        height , width , channel = frame.shape
+        frame1 = cv2.medianBlur(frame,5)
+        aa = frame.copy()
+        imgray = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+        
+        imgray = cv2.erode(imgray, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=1)
+        imgray = cv2.dilate(imgray, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=3)
     
-    res2 = cv2.erode(res2, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=3)
-    res2 = cv2.dilate(res2, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=3)
+        th2 = cv2.adaptiveThreshold(imgray,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
+                cv2.THRESH_BINARY_INV,11,3)
+        img = cv2.erode(th2, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=1)
+        th2 = cv2.dilate(img, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=4)
+        ret, labels = cv2.connectedComponents(th2)
+        
     
-    x = cv2.Sobel(res2,cv2.CV_16S,1,0)  
-    y = cv2.Sobel(res2,cv2.CV_16S,0,1)  
-      
-    absX = cv2.convertScaleAbs(x)   # 转回uint8  
-    absY = cv2.convertScaleAbs(y)  
-      
-    edges = cv2.addWeighted(absX,0.5,absY,0.5,0)  
-    edges = cv2.cvtColor(edges, cv2.COLOR_BGR2GRAY) 
-    imaged, contours, hier = cv2.findContours(edges,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-
-#    if frames < history:
-#        frames += 1
-#        continue
-#
-#    th = cv2.erode(th, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=3)
-#    dilated = cv2.dilate(th, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (8, 3)), iterations=2)
-#
-#    imaged, contours, hier = cv2.findContours(dilated,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-#
-    for c in contours:
-        x, y, w, h = cv2.boundingRect(c)
+#        label_hue = np.uint8(179*labels/np.max(labels))
+#        blank_ch = 255*np.ones_like(label_hue)
+#        labeled_img = cv2.merge([label_hue, blank_ch, blank_ch])
 #        
-        area = cv2.contourArea(c)
-        print(area)
-        if 5000 < area < 50000:
-#            roiImg = frame[y:(y+h+40),x:(x+w+40)]
-#            res=cv2.resize(roiImg,(60,60))
+#        labeled_img = cv2.cvtColor(labeled_img, cv2.COLOR_HSV2BGR)
+#    
+#    # set bg label to black
+#        labeled_img[label_hue==0] = 0
+    #    
+        for index in range(1,np.max(labels)+1):
+            N = np.where(labels==index)
+    
+            if(N[0].shape[0]<1200): continue
+            else:
+                x = np.min(N[0]) ## 框框最左上角的x座標
+                y = np.min(N[1]) ## 框框最左上角的y座標
+                w = np.max(N[0]) ## 框框最右下角的x座標
+                h = np.max(N[1]) ## 框框最右下角的y座標
+                
+            ##////////////////////////////////////////////    
             
-#            images = []
-#            img_array = image.img_to_array(res)
-#            images.append(img_array)
-#            data = np.array(images)
-#        
-#            prediction1 = Module.predict_classes(data)
-#            print(prediction1)
-#            if(prediction1==1):
-#                print(str(x)+' '+str(y)+' '+str(w)+' '+str(h))
+                area = (w-x)*(h-y)
+
+
+
+            ##////////////////////////////////////////////                
+
+
+
+
+#                if(w-x==height-1 or h-y==width-1): continue
+#                cv2.rectangle(frame,(y,x),(h,w),(255,255,0),2)
+    #            print(str(x)+' '+str(y)+' '+str(w)+' '+str(h))
+                
+                roiImg = frame[x:w,y:h]
+                
+                res=cv2.resize(roiImg,(80,80))
+                
+                images = []
+                img_array = image.img_to_array(res)
+                images.append(img_array)
+                data = np.array(images)
+#    #        
+                prediction1 = Module.predict_classes(data)
 #                
-#                #cv2.imwrite(st,roiImg)
-#                a+=1
-            cv2.rectangle(frame, (x, y), (x + w, y + h),   (0, 255, 0), 2)
-    if(delay>=0 and cv2.waitKey (delay)>=0):  
-        cv2.waitKey(0)       
-    if cv2.waitKey(110) & 0xff == 27:
-        break
-    cv2.imshow("detection", frame)
-    cv2.imshow("back", res2)
-    cv2.imshow("gray",edges)
-    if(frames==0):
-        cv2.imwrite("D://user//Documents//Save//Kmeans.jpg",res2)
-    frames+=1
+    #            print(prediction1)
+                if(prediction1[0]==1):
+                    cv2.rectangle(aa,(y,x),(h,w),(0,255,0),2)
+                    cv2.rectangle(frame,(y,x),(h,w),(0,255,0),2)
+                    positive+=1
+#                    st = 'D://Training Data//P//' + str(positive) + '.jpg'
+#                    cv2.imwrite(st,roiImg)
+                else:
+                    cv2.rectangle(frame,(y,x),(h,w),(140,180,210),2)
+                    negative+=1
+#                    st = 'D://Training Data//N//' + str(negative) + '.jpg'
+#                    cv2.imwrite(st,roiImg)
+                
+    
+#        if not res:
+#            break
+        cv2.imshow("original", frame)
+#        if(frames>=43):
+        out.write(frame)
+        out1.write(aa)
+        cv2.imshow("GAUSSIAN_C", th2)
+#        cv2.imshow("IMGRAY", imgray)
+        st = 'D://Training Data//Experiment//test12//' + str(frames) + '.jpg'
+        cv2.imwrite(st,frame)
+#        st = 'D://Training Data//Experiment//test12//LABELING_' + str(frames) + '.jpg'
+#        cv2.imwrite(st,labeled_img)
+
+        if cv2.waitKey(1)==27:
+            break
+        frames+=1
+        
+tEnd = time.time()
+print (tEnd - tStart)
+
+print(positive)
+print(negative)
 camera.release()
-cv2.destroyAllWindows() 
-
-
-
+out.release()
+out1.release()
+cv2.destroyAllWindows()
+    
